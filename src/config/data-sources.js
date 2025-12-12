@@ -8,6 +8,7 @@ module.exports = {
     enabled: process.env.CENSUS_ENABLED !== 'false',
     apiKey: process.env.CENSUS_API_KEY || '',
     baseUrl: process.env.CENSUS_BASE_URL || 'https://api.census.gov',
+    dataPath: process.env.CENSUS_DATA_PATH || './data/processed/census/census_zipcode_data.gpkg',
     cacheTTL: 3600000 // 1 hour
   },
   economic: {

@@ -61,6 +61,103 @@ function createDataRoutes(dataPipeline) {
     }
   });
 
+  // Get data for a specific zipcode
+  router.get('/api/v1/data/zipcode', async (req, res) => {
+    try {
+      const { zipcode, source = 'census' } = req.query;
+      
+      if (!zipcode) {
+        return res.status(400).json({ error: 'zipcode parameter required' });
+      }
+
+      if (dataPipeline) {
+        const result = await dataPipeline.query({
+          zipcode,
+          source
+        });
+        
+        if (result.error) {
+          return res.status(404).json({ error: result.error });
+        }
+        
+        if (result.data && result.data.length > 0) {
+          return res.json({ zipcode, data: result.data[0], source: result.source });
+        }
+        
+        return res.status(404).json({ error: `No data found for zipcode ${zipcode}` });
+      }
+
+      res.json({ message: 'Data pipeline not yet implemented' });
+    } catch (error) {
+      console.error('Error querying zipcode data:', error);
+      res.status(500).json({ error: 'Failed to query zipcode data', message: error.message });
+    }
+  });
+
+  // List all available zipcodes
+  router.get('/api/v1/data/zipcodes', async (req, res) => {
+    try {
+      const { source = 'census' } = req.query;
+      
+      if (dataPipeline) {
+        const sourceInstance = dataPipeline.sources.get(source);
+        
+        if (!sourceInstance) {
+          return res.status(404).json({ error: `Source ${source} not found` });
+        }
+        
+        if (typeof sourceInstance.getZipcodes === 'function') {
+          const zipcodes = await sourceInstance.getZipcodes();
+          return res.json({ 
+            zipcodes, 
+            count: zipcodes.length,
+            source 
+          });
+        }
+        
+        return res.status(400).json({ error: `Source ${source} does not support zipcode listing` });
+      }
+
+      res.json({ message: 'Data pipeline not yet implemented' });
+    } catch (error) {
+      console.error('Error listing zipcodes:', error);
+      res.status(500).json({ error: 'Failed to list zipcodes', message: error.message });
+    }
+  });
+
+  // Get metadata about available data
+  router.get('/api/v1/data/metadata', async (req, res) => {
+    try {
+      const { source = 'census' } = req.query;
+      
+      if (dataPipeline) {
+        const sourceInstance = dataPipeline.sources.get(source);
+        
+        if (!sourceInstance) {
+          return res.status(404).json({ error: `Source ${source} not found` });
+        }
+        
+        if (typeof sourceInstance.getMetadata === 'function') {
+          const metadata = await sourceInstance.getMetadata();
+          return res.json({ 
+            source,
+            ...metadata
+          });
+        }
+        
+        return res.json({ 
+          source,
+          message: 'Metadata not available for this source'
+        });
+      }
+
+      res.json({ message: 'Data pipeline not yet implemented' });
+    } catch (error) {
+      console.error('Error getting metadata:', error);
+      res.status(500).json({ error: 'Failed to get metadata', message: error.message });
+    }
+  });
+
   return router;
 }
 

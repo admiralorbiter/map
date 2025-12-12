@@ -81,6 +81,9 @@ http://localhost:8080/index.html
 ### Data API (v1)
 - `GET /api/v1/data/location?bounds=...` - Get data by location
 - `GET /api/v1/data/aggregate?bounds=...` - Get aggregated data
+- `GET /api/v1/data/zipcode?zipcode=64108` - Get census data for a zipcode
+- `GET /api/v1/data/zipcodes` - List all available zipcodes
+- `GET /api/v1/data/metadata?source=census` - Get data source metadata
 
 ### Simulation API (v1)
 - `GET /api/v1/simulation/status` - Get simulation status
@@ -115,11 +118,20 @@ See `.env.example` for available configuration options.
 
 The project is organized into modular systems:
 
-- **Map System**: Tile serving and map rendering
-- **Data Pipeline**: Data ingestion and processing (Phase 2)
-- **Simulation**: Simulation engine (Phase 3)
+- **Map System**: Tile serving and map rendering ✅
+- **Data Pipeline**: Data ingestion and processing ✅ (Census data import implemented)
+- **Simulation**: Simulation engine (Phase 3 - To be implemented)
 
 Each system can be developed and tested independently.
+
+### Current Status
+
+- ✅ OSM tile serving
+- ✅ Census data import (ACS + TIGER boundaries for zipcodes)
+- ✅ Census data API endpoints
+- ⏳ Map visualization of census data (next step)
+- ⏳ Additional data sources (economic, transport, weather)
+- ⏳ Simulation engine
 
 ## Documentation
 

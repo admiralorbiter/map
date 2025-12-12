@@ -16,6 +16,8 @@ const createHealthRoutes = require('./routes/health');
 const createDataRoutes = require('./routes/data');
 const createSimulationRoutes = require('./routes/simulation');
 const errorHandler = require('./middleware/errorHandler');
+const createDataPipeline = require('../systems/data-pipeline');
+const CensusSource = require('../systems/data-pipeline/sources/census-source');
 
 class Server {
   constructor() {
@@ -37,8 +39,22 @@ class Server {
       cacheTTL: config.tiles.cacheTTL
     });
 
-    // TODO: Initialize data pipeline (Phase 2)
-    // this.dataPipeline = require('../systems/data-pipeline')({ ... });
+    // Initialize data pipeline
+    this.dataPipeline = createDataPipeline({
+      cache: null // Cache can be added later if needed
+    });
+
+    // Register census source if enabled
+    if (config.dataSources.census.enabled) {
+      const censusSource = new CensusSource({
+        dataPath: config.dataSources.census.dataPath,
+        cacheTTL: config.dataSources.census.cacheTTL
+      });
+      this.dataPipeline.registerSource('census', censusSource);
+    }
+
+    // Initialize all sources
+    await this.dataPipeline.initialize();
 
     // TODO: Initialize simulation (Phase 3)
     // this.simulation = require('../systems/simulation')({ dataPipeline: this.dataPipeline });

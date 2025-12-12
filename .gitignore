@@ -20,6 +20,7 @@
 *.db
 *.sqlite
 *.sqlite3
+*.gpkg
 
 # Dependencies
 /node_modules
@@ -62,3 +63,14 @@ next-env.d.ts
 # Logs
 logs/
 *.log
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+.venv
