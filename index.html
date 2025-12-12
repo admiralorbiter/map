@@ -72,6 +72,61 @@
             font-size: 12px;
             color: #666;
         }
+        
+        .search-box {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: rgba(255, 255, 255, 0.95);
+            padding: 10px;
+            border-radius: 5px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+            z-index: 1;
+            min-width: 250px;
+        }
+        
+        .search-box input {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 3px;
+            font-size: 14px;
+            box-sizing: border-box;
+        }
+        
+        .search-box input:focus {
+            outline: none;
+            border-color: #4a90e2;
+        }
+        
+        .search-results {
+            margin-top: 5px;
+            max-height: 200px;
+            overflow-y: auto;
+            display: none;
+        }
+        
+        .search-result-item {
+            padding: 8px;
+            cursor: pointer;
+            border-bottom: 1px solid #eee;
+            font-size: 12px;
+        }
+        
+        .search-result-item:hover {
+            background: #f0f0f0;
+        }
+        
+        .search-result-item:last-child {
+            border-bottom: none;
+        }
+        
+        .search-loading {
+            display: none;
+            font-size: 12px;
+            color: #666;
+            margin-top: 5px;
+        }
     </style>
 </head>
 <body>
@@ -88,6 +143,12 @@
             <label><input type="checkbox" id="toggle-water" checked> Water</label>
             <label><input type="checkbox" id="toggle-landuse" checked> Land Use</label>
         </div>
+    </div>
+    
+    <div class="search-box">
+        <input type="text" id="address-search" placeholder="Search for an address or place..." autocomplete="off">
+        <div class="search-loading" id="search-loading">Searching...</div>
+        <div class="search-results" id="search-results"></div>
     </div>
     
     <div class="building-info" id="building-info">
@@ -413,6 +474,137 @@
 
         document.getElementById('toggle-landuse').addEventListener('change', (e) => {
             map.setLayoutProperty('landuse', 'visibility', e.target.checked ? 'visible' : 'none');
+        });
+
+        // Address search functionality using Nominatim
+        const searchInput = document.getElementById('address-search');
+        const searchResults = document.getElementById('search-results');
+        const searchLoading = document.getElementById('search-loading');
+        let searchTimeout;
+        let currentMarker = null;
+
+        // Create a marker for search results
+        const createMarker = (lng, lat) => {
+            // Remove existing marker
+            if (currentMarker) {
+                currentMarker.remove();
+            }
+            
+            // Create new marker
+            const el = document.createElement('div');
+            el.className = 'search-marker';
+            el.style.width = '20px';
+            el.style.height = '20px';
+            el.style.borderRadius = '50%';
+            el.style.backgroundColor = '#ff6b6b';
+            el.style.border = '3px solid white';
+            el.style.boxShadow = '0 2px 4px rgba(0,0,0,0.3)';
+            el.style.cursor = 'pointer';
+            
+            currentMarker = new maplibregl.Marker({ element: el })
+                .setLngLat([lng, lat])
+                .addTo(map);
+            
+            return currentMarker;
+        };
+
+        // Geocode address using Nominatim
+        const searchAddress = async (query) => {
+            if (!query || query.length < 3) {
+                searchResults.style.display = 'none';
+                return;
+            }
+
+            searchLoading.style.display = 'block';
+            searchResults.style.display = 'none';
+            searchResults.innerHTML = '';
+
+            try {
+                // Use Nominatim geocoding API (free, open source)
+                const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=5&bounded=1&viewbox=-95.0,38.8,-94.2,39.3`;
+                
+                const response = await fetch(url, {
+                    headers: {
+                        'User-Agent': 'KansasCity3DMap/1.0' // Required by Nominatim
+                    }
+                });
+                
+                const data = await response.json();
+                searchLoading.style.display = 'none';
+
+                if (data.length === 0) {
+                    searchResults.innerHTML = '<div class="search-result-item" style="color: #999;">No results found</div>';
+                    searchResults.style.display = 'block';
+                    return;
+                }
+
+                // Display results
+                data.forEach((result, index) => {
+                    const item = document.createElement('div');
+                    item.className = 'search-result-item';
+                    item.textContent = result.display_name;
+                    item.onclick = () => {
+                        const lng = parseFloat(result.lon);
+                        const lat = parseFloat(result.lat);
+                        
+                        // Create marker
+                        createMarker(lng, lat);
+                        
+                        // Fly to location
+                        map.flyTo({
+                            center: [lng, lat],
+                            zoom: 16,
+                            pitch: 45,
+                            duration: 2000
+                        });
+                        
+                        // Hide results
+                        searchResults.style.display = 'none';
+                        searchInput.value = result.display_name;
+                    };
+                    searchResults.appendChild(item);
+                });
+
+                searchResults.style.display = 'block';
+            } catch (error) {
+                console.error('Geocoding error:', error);
+                searchLoading.style.display = 'none';
+                searchResults.innerHTML = '<div class="search-result-item" style="color: #ff6b6b;">Error searching. Please try again.</div>';
+                searchResults.style.display = 'block';
+            }
+        };
+
+        // Debounced search
+        searchInput.addEventListener('input', (e) => {
+            clearTimeout(searchTimeout);
+            const query = e.target.value.trim();
+            
+            if (query.length < 3) {
+                searchResults.style.display = 'none';
+                return;
+            }
+            
+            searchTimeout = setTimeout(() => {
+                searchAddress(query);
+            }, 500); // Wait 500ms after user stops typing
+        });
+
+        // Clear results when clicking outside
+        document.addEventListener('click', (e) => {
+            if (!e.target.closest('.search-box')) {
+                searchResults.style.display = 'none';
+            }
+        });
+
+        // Handle Enter key
+        searchInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                const query = searchInput.value.trim();
+                if (query.length >= 3) {
+                    searchAddress(query);
+                }
+            }
         });
 
         // Optimize rendering during camera movements
