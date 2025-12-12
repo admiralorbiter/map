@@ -127,6 +127,97 @@
             color: #666;
             margin-top: 5px;
         }
+        
+        .poi-legend-panel {
+            position: absolute;
+            top: 70px;
+            right: 10px;
+            background: rgba(255, 255, 255, 0.98);
+            border-radius: 5px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+            z-index: 1;
+            min-width: 220px;
+            max-width: 280px;
+            transition: all 0.3s ease;
+            overflow: hidden;
+        }
+        
+        .poi-legend-panel.collapsed {
+            max-height: 40px;
+        }
+        
+        .poi-legend-header {
+            padding: 10px 12px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-weight: bold;
+            font-size: 13px;
+            user-select: none;
+        }
+        
+        .poi-legend-header:hover {
+            background: linear-gradient(135deg, #764ba2 0%, #667eea 100%);
+        }
+        
+        .poi-legend-toggle {
+            font-size: 16px;
+            transition: transform 0.3s ease;
+        }
+        
+        .poi-legend-panel.collapsed .poi-legend-toggle {
+            transform: rotate(180deg);
+        }
+        
+        .poi-legend-content {
+            padding: 12px;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        
+        .poi-legend-item {
+            display: flex;
+            align-items: center;
+            padding: 6px 0;
+            font-size: 12px;
+            border-bottom: 1px solid #f0f0f0;
+        }
+        
+        .poi-legend-item:last-child {
+            border-bottom: none;
+        }
+        
+        .poi-legend-color {
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            border: 2px solid #fff;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+            margin-right: 10px;
+            flex-shrink: 0;
+        }
+        
+        .poi-legend-name {
+            flex: 1;
+            color: #333;
+        }
+        
+        .poi-legend-count {
+            color: #999;
+            font-size: 11px;
+            margin-left: 8px;
+        }
+        
+        .poi-legend-empty {
+            text-align: center;
+            color: #999;
+            font-size: 11px;
+            padding: 10px;
+            font-style: italic;
+        }
     </style>
 </head>
 <body>
@@ -135,14 +226,26 @@
         <h3 style="margin: 0 0 5px 0;">Kansas City 3D Map</h3>
         <p style="margin: 0; font-size: 12px; color: #666;">Loading tiles from local server...</p>
         <p style="margin: 5px 0 0 0; font-size: 11px; color: #888;">
-            Right-click + drag to rotate | Scroll to zoom | Click buildings for info
+            Right-click + drag to rotate | Scroll to zoom | Click POI/places for info | Hover zipcodes for data
         </p>
         <div class="layer-controls">
             <label><input type="checkbox" id="toggle-buildings" checked> Buildings</label>
             <label><input type="checkbox" id="toggle-roads" checked> Roads</label>
             <label><input type="checkbox" id="toggle-water" checked> Water</label>
             <label><input type="checkbox" id="toggle-landuse" checked> Land Use</label>
+            <label><input type="checkbox" id="toggle-poi" checked> Points of Interest</label>
+            <label><input type="checkbox" id="toggle-places" checked> Places</label>
             <label><input type="checkbox" id="toggle-census" checked> Census Data</label>
+        </div>
+        <div class="poi-controls" id="poi-controls" style="margin-top: 10px; padding-top: 10px; border-top: 1px solid #ddd; display: none;">
+            <label style="display: block; margin-bottom: 5px; font-size: 12px; font-weight: bold;">Filter by Type:</label>
+            <select id="poi-filter" style="width: 100%; padding: 5px; font-size: 12px;">
+                <option value="all">All POI Types</option>
+            </select>
+            <div id="poi-legend" style="margin-top: 8px; font-size: 11px; max-height: 150px; overflow-y: auto;">
+                <div style="font-weight: bold; margin-bottom: 4px;">Color Legend:</div>
+                <div id="poi-legend-items"></div>
+            </div>
         </div>
         <div class="census-controls" id="census-controls" style="margin-top: 10px; padding-top: 10px; border-top: 1px solid #ddd;">
             <label style="display: block; margin-bottom: 5px; font-size: 12px; font-weight: bold;">Variable:</label>
@@ -157,6 +260,12 @@
             <div style="font-weight: bold; margin-bottom: 5px;" id="legend-title">Median Household Income</div>
             <div id="legend-scale"></div>
         </div>
+        <div class="zipcode-info" id="zipcode-info" style="margin-top: 10px; padding: 8px; background: rgba(255,255,255,0.95); border-radius: 3px; font-size: 11px; border: 1px solid #ddd; display: none;">
+            <div style="font-weight: bold; margin-bottom: 6px; font-size: 12px; color: #333;" id="zipcode-title">Zipcode Information</div>
+            <div id="zipcode-details" style="line-height: 1.6; color: #555;">
+                <div style="font-style: italic; color: #999;">Hover or click on a zipcode area</div>
+            </div>
+        </div>
     </div>
     
     <div class="search-box">
@@ -170,6 +279,16 @@
         <p id="building-height">Height: -</p>
         <p id="building-levels">Levels: -</p>
         <p id="building-type">Type: -</p>
+    </div>
+    
+    <div class="poi-legend-panel" id="poi-legend-panel" style="display: none;">
+        <div class="poi-legend-header" id="poi-legend-toggle">
+            <span>📍 POI Legend</span>
+            <span class="poi-legend-toggle">▼</span>
+        </div>
+        <div class="poi-legend-content" id="poi-legend-content">
+            <div class="poi-legend-empty">Zoom in to see POI types</div>
+        </div>
     </div>
 
     <!-- MapLibre GL JS -->
@@ -229,7 +348,7 @@
                     {
                         id: 'water',
                         type: 'fill',
-                        source: 'ks-mo',
+                        source: 'kc-enhanced',
                         'source-layer': 'water',
                         paint: {
                             'fill-color': '#4a90e2',
@@ -239,7 +358,7 @@
                     {
                         id: 'landuse',
                         type: 'fill',
-                        source: 'ks-mo',
+                        source: 'kc-enhanced',
                         'source-layer': 'landuse',
                         paint: {
                             'fill-color': '#e8e8e8',
@@ -249,7 +368,7 @@
                     {
                         id: 'roads',
                         type: 'line',
-                        source: 'ks-mo',
+                        source: 'kc-enhanced',
                         'source-layer': 'transportation',
                         paint: {
                             'line-color': '#666',
@@ -269,7 +388,7 @@
                     {
                         id: 'buildings-3d',
                         type: 'fill-extrusion',
-                        source: 'ks-mo',
+                        source: 'kc-enhanced',
                         'source-layer': 'building',
                         minzoom: 10,  // Show buildings at lower zoom for street view
                         paint: {
@@ -286,6 +405,124 @@
                             ],
                             'fill-extrusion-base': 0,
                             'fill-extrusion-opacity': 0.9
+                        }
+                    },
+                    {
+                        id: 'places',
+                        type: 'symbol',
+                        source: 'kc-enhanced',
+                        'source-layer': 'place',
+                        minzoom: 0,
+                        layout: {
+                            'text-field': ['get', 'name'],
+                            'text-font': ['Open Sans Regular', 'Arial Unicode MS Regular'],
+                            'text-size': [
+                                'interpolate',
+                                ['linear'],
+                                ['zoom'],
+                                0, 10,
+                                10, 12,
+                                14, 14
+                            ],
+                            'text-anchor': 'center',
+                            'text-allow-overlap': false,
+                            'text-ignore-placement': false
+                        },
+                        paint: {
+                            'text-color': '#333',
+                            'text-halo-color': '#fff',
+                            'text-halo-width': 2,
+                            'text-halo-blur': 1
+                        }
+                    },
+                    {
+                        id: 'poi',
+                        type: 'circle',
+                        source: 'kc-enhanced',
+                        'source-layer': 'poi',
+                        minzoom: 12,  // POI only shows at zoom 12+ per MBTiles metadata
+                        paint: {
+                            'circle-radius': [
+                                'interpolate',
+                                ['linear'],
+                                ['zoom'],
+                                12, 3,
+                                14, 5,
+                                16, 8
+                            ],
+                            'circle-color': [
+                                'case',
+                                ['has', 'class'],
+                                [
+                                    'match',
+                                    ['get', 'class'],
+                                    'hospital', '#e74c3c',
+                                    'clinic', '#c0392b',
+                                    'pharmacy', '#e67e22',
+                                    'restaurant', '#f39c12',
+                                    'cafe', '#f1c40f',
+                                    'bar', '#d35400',
+                                    'hotel', '#3498db',
+                                    'school', '#9b59b6',
+                                    'university', '#8e44ad',
+                                    'parking', '#95a5a6',
+                                    'gas_station', '#34495e',
+                                    'bank', '#16a085',
+                                    'atm', '#1abc9c',
+                                    'shop', '#e91e63',
+                                    'supermarket', '#c2185b',
+                                    'place_of_worship', '#7f8c8d',
+                                    'museum', '#27ae60',
+                                    'theatre', '#2980b9',
+                                    'sport', '#2ecc71',
+                                    'attraction', '#e74c3c',
+                                    '#ff6b6b' // default color
+                                ],
+                                '#ff6b6b' // fallback
+                            ],
+                            'circle-stroke-color': '#fff',
+                            'circle-stroke-width': 1,
+                            'circle-opacity': 0.8
+                        }
+                    },
+                    {
+                        id: 'poi-hit-area',
+                        type: 'circle',
+                        source: 'kc-enhanced',
+                        'source-layer': 'poi',
+                        minzoom: 12,
+                        paint: {
+                            'circle-radius': [
+                                'interpolate',
+                                ['linear'],
+                                ['zoom'],
+                                12, 20,
+                                14, 25,
+                                16, 30
+                            ],
+                            'circle-opacity': 0
+                        }
+                    },
+                    {
+                        id: 'poi-labels',
+                        type: 'symbol',
+                        source: 'kc-enhanced',
+                        'source-layer': 'poi',
+                        minzoom: 14,  // Labels only at higher zoom
+                        layout: {
+                            'text-field': ['get', 'name'],
+                            'text-font': ['Open Sans Regular', 'Arial Unicode MS Regular'],
+                            'text-size': 11,
+                            'text-anchor': 'top',
+                            'text-offset': [0, 0.5],
+                            'text-allow-overlap': false,
+                            'text-ignore-placement': false
+                        },
+                        paint: {
+                            'text-color': '#333',
+                            'text-halo-color': '#fff',
+                            'text-halo-width': 1.5,
+                            'text-halo-blur': 1
                         }
                     }
                 ],
@@ -420,6 +657,8 @@
                 updateCensusLayers();
                 
                 console.log('Census data loaded:', censusData.features.length, 'zipcodes');
+                // Show zipcode info panel when census data is loaded
+                document.getElementById('zipcode-info').style.display = 'block';
             } catch (error) {
                 console.error('Error loading census data:', error);
                 document.querySelector('.map-overlay p').textContent = 'Error loading census data. Make sure geometry is converted to WKT.';
@@ -535,6 +774,24 @@
         // Handle map load events
         map.on('load', () => {
             console.log('Map loaded successfully');
+            
+            // Initialize POI legend panel if POI layer is enabled
+            poiLegendPanel = document.getElementById('poi-legend-panel');
+            poiLegendToggle = document.getElementById('poi-legend-toggle');
+            
+            if (poiLegendToggle && poiLegendPanel) {
+                poiLegendToggle.addEventListener('click', () => {
+                    poiLegendPanel.classList.toggle('collapsed');
+                });
+                
+                // Show legend if POI is already checked
+                if (document.getElementById('toggle-poi').checked) {
+                    poiLegendPanel.style.display = 'block';
+                    setTimeout(() => {
+                        schedulePoiSummaryRefresh(50);
+                    }, 1000);
+                }
+            }
             document.querySelector('.map-overlay p').textContent = '3D Map loaded - Right-click + drag to rotate, scroll to zoom';
             
             // Load census data (load all initially, then use viewport-based on move)
@@ -611,7 +868,7 @@
                         }
                         
                         // Fix other layers if needed
-                        ['water', 'landuse', 'roads'].forEach(layerId => {
+                        ['water', 'landuse', 'roads', 'poi', 'poi-hit-area', 'poi-labels', 'places'].forEach(layerId => {
                             if (map.getLayer(layerId)) {
                                 const currentSource = map.getLayer(layerId).source;
                                 if (currentSource === sourceId) {
@@ -631,8 +888,9 @@
             
             // Check source after it loads
             map.on('sourcedata', (e) => {
-                if (e.isSourceLoaded && e.sourceId === 'ks-mo') {
-                    checkSource('ks-mo');
+                if (e.isSourceLoaded && (e.sourceId === 'kc-enhanced' || e.sourceId === 'ks-mo')) {
+                    const sourceToCheck = e.sourceId === 'kc-enhanced' ? 'kc-enhanced' : 'ks-mo';
+                    checkSource(sourceToCheck);
                 }
             });
         });
@@ -712,6 +970,364 @@
             map.setLayoutProperty('landuse', 'visibility', e.target.checked ? 'visible' : 'none');
         });
 
+        // POI type tracking and filtering
+        let poiTypes = new Set();
+        let poiLegendPanel = null;
+        let poiLegendToggle = null;
+        let poiQueryCenter = null; // Center point for POI queries (map center or clicked point)
+        let poiTypeColors = {
+            'hospital': { color: '#e74c3c', name: 'Hospital' },
+            'clinic': { color: '#c0392b', name: 'Clinic' },
+            'pharmacy': { color: '#e67e22', name: 'Pharmacy' },
+            'restaurant': { color: '#f39c12', name: 'Restaurant' },
+            'cafe': { color: '#f1c40f', name: 'Cafe' },
+            'bar': { color: '#d35400', name: 'Bar' },
+            'hotel': { color: '#3498db', name: 'Hotel' },
+            'school': { color: '#9b59b6', name: 'School' },
+            'university': { color: '#8e44ad', name: 'University' },
+            'parking': { color: '#95a5a6', name: 'Parking' },
+            'gas_station': { color: '#34495e', name: 'Gas Station' },
+            'bank': { color: '#16a085', name: 'Bank' },
+            'atm': { color: '#1abc9c', name: 'ATM' },
+            'shop': { color: '#e91e63', name: 'Shop' },
+            'supermarket': { color: '#c2185b', name: 'Supermarket' },
+            'place_of_worship': { color: '#7f8c8d', name: 'Place of Worship' },
+            'museum': { color: '#27ae60', name: 'Museum' },
+            'theatre': { color: '#2980b9', name: 'Theatre' },
+            'sport': { color: '#2ecc71', name: 'Sport' },
+            'attraction': { color: '#e74c3c', name: 'Attraction' }
+        };
+
+        // POI summary state (robust, server-driven)
+        let poiSummaryCounts = {};
+        let poiSummaryTotal = 0;
+        let poiSummaryAbortController = null;
+        let poiSummaryTimer = null;
+        let poiQueryCenterLocked = false; // Whether center is locked by user click
+
+        function clampPoiZoom(z) {
+            const zi = Math.floor(z);
+            return Math.min(15, Math.max(12, zi));
+        }
+
+        // Get POI query bounds - use visible map bounds or center + radius if locked
+        function getBoundsString() {
+            const zoom = map.getZoom();
+            const clampedZoom = clampPoiZoom(zoom);
+            
+            // If center is locked (user clicked), use a radius around that point
+            if (poiQueryCenter && poiQueryCenterLocked) {
+                // Calculate radius based on clamped zoom (matches API zoom)
+                // At zoom 12: ~0.015 degrees (~1.7km)
+                // At zoom 14: ~0.0075 degrees (~830m)
+                // At zoom 15: ~0.005 degrees (~555m)
+                const radius = Math.max(0.003, 0.03 / Math.pow(2, clampedZoom - 12));
+                return `${poiQueryCenter.lng - radius},${poiQueryCenter.lat - radius},${poiQueryCenter.lng + radius},${poiQueryCenter.lat + radius}`;
+            }
+            
+            // Otherwise, use the visible map bounds (expanded slightly for better coverage)
+            const bounds = map.getBounds();
+            const ne = bounds.getNorthEast();
+            const sw = bounds.getSouthWest();
+            
+            // Expand bounds slightly (5% padding) to ensure we capture POIs near edges
+            const lngPadding = (ne.lng - sw.lng) * 0.05;
+            const latPadding = (ne.lat - sw.lat) * 0.05;
+            
+            return `${sw.lng - lngPadding},${sw.lat - latPadding},${ne.lng + lngPadding},${ne.lat + latPadding}`;
+        }
+
+        // Refresh POI summary when map changes (debounced)
+        // Use a single handler to avoid race conditions
+        let poiSummaryRefreshScheduled = false;
+        
+        function schedulePoiSummaryRefreshOnce(delay = 300) {
+            if (poiSummaryRefreshScheduled) return;
+            poiSummaryRefreshScheduled = true;
+            
+            if (poiSummaryTimer) clearTimeout(poiSummaryTimer);
+            poiSummaryTimer = setTimeout(() => {
+                poiSummaryRefreshScheduled = false;
+                if (document.getElementById('toggle-poi')?.checked) {
+                    // Reset to map bounds if not locked by user click
+                    if (!poiQueryCenterLocked) {
+                        poiQueryCenter = null; // Will use visible map bounds
+                    }
+                    refreshPoiSummary();
+                }
+            }, delay);
+        }
+
+        // Legacy function - kept for backward compatibility with existing calls
+        function schedulePoiSummaryRefresh(delay = 250) {
+            schedulePoiSummaryRefreshOnce(delay);
+        }
+
+        async function refreshPoiSummary() {
+            if (!map.getSource('kc-enhanced')) return;
+
+            const zoom = map.getZoom();
+            if (zoom < 12) {
+                poiSummaryCounts = {};
+                poiSummaryTotal = 0;
+                poiTypes.clear();
+                updatePoiFilter();
+                return;
+            }
+
+            // Abort any in-flight request
+            if (poiSummaryAbortController) {
+                try { poiSummaryAbortController.abort(); } catch (e) { /* ignore */ }
+            }
+            poiSummaryAbortController = new AbortController();
+
+            try {
+                const clampedZoom = clampPoiZoom(zoom);
+                const params = new URLSearchParams({
+                    bounds: getBoundsString(),
+                    source: 'kc-enhanced',
+                    zoom: String(clampedZoom),
+                    summary: 'class'
+                });
+
+                const response = await fetch(`/api/v1/osm/poi?${params.toString()}`, {
+                    signal: poiSummaryAbortController.signal
+                });
+
+                if (!response.ok) {
+                    throw new Error(`POI summary request failed: ${response.status}`);
+                }
+
+                const data = await response.json();
+
+                // Preferred: server-side summary response
+                if (data && data.counts && typeof data.counts === 'object') {
+                    poiSummaryCounts = data.counts || {};
+                    poiSummaryTotal = data.total || 0;
+                } else if (data && Array.isArray(data.features)) {
+                    // Backward-compatible: full FeatureCollection response
+                    poiSummaryCounts = {};
+                    poiSummaryTotal = 0;
+                    data.features.forEach(f => {
+                        const cls = f?.properties?.class;
+                        if (cls != null && cls !== '') {
+                            poiSummaryCounts[cls] = (poiSummaryCounts[cls] || 0) + 1;
+                            poiSummaryTotal += 1;
+                        }
+                    });
+                } else {
+                    poiSummaryCounts = {};
+                    poiSummaryTotal = 0;
+                }
+
+                poiTypes.clear();
+                Object.keys(poiSummaryCounts).forEach(k => {
+                    if (k != null && k !== '') poiTypes.add(k);
+                });
+
+                // Update UI immediately
+                updatePoiFilter();
+                updateFloatingPoiLegend();
+
+                // Final fallback: if API returns nothing but POIs are clearly rendered, count from rendered features
+                if (poiSummaryTotal === 0) {
+                    const rendered = map.queryRenderedFeatures({ layers: ['poi'] }) || [];
+                    if (rendered.length > 0) {
+                        poiSummaryCounts = {};
+                        poiSummaryTotal = 0;
+                        rendered.forEach(f => {
+                            const cls = f?.properties?.class;
+                            if (cls != null && cls !== '') {
+                                poiSummaryCounts[cls] = (poiSummaryCounts[cls] || 0) + 1;
+                                poiSummaryTotal += 1;
+                            }
+                        });
+                        poiTypes.clear();
+                        Object.keys(poiSummaryCounts).forEach(k => {
+                            if (k != null && k !== '') poiTypes.add(k);
+                        });
+                        updatePoiFilter();
+                        updateFloatingPoiLegend();
+                    }
+                }
+            } catch (error) {
+                if (error?.name === 'AbortError') return;
+                console.warn('Error fetching POI summary:', error);
+                // Fallback: keep previous summary rather than wiping UI
+            }
+        }
+
+        // Update POI filter dropdown
+        function updatePoiFilter() {
+            const filterSelect = document.getElementById('poi-filter');
+            const currentValue = filterSelect.value;
+            
+            // Clear existing options except "All"
+            filterSelect.innerHTML = '<option value="all">All POI Types</option>';
+            
+            // Add options for each POI type found
+            Array.from(poiTypes).sort().forEach(poiClass => {
+                const option = document.createElement('option');
+                option.value = poiClass;
+                const displayName = poiTypeColors[poiClass]?.name || poiClass.charAt(0).toUpperCase() + poiClass.slice(1).replace(/_/g, ' ');
+                option.textContent = displayName;
+                filterSelect.appendChild(option);
+            });
+            
+            // Restore previous selection if it still exists
+            if (currentValue && Array.from(poiTypes).includes(currentValue)) {
+                filterSelect.value = currentValue;
+            }
+            
+            updatePoiLegend();
+        }
+
+        // Update POI legend (both in controls and floating panel)
+        function updatePoiLegend() {
+            // Update the small legend in controls panel
+            const legendContainer = document.getElementById('poi-legend-items');
+            if (legendContainer) {
+                legendContainer.innerHTML = '';
+                
+                const selectedType = document.getElementById('poi-filter').value;
+                const typesToShow = selectedType === 'all' ? Array.from(poiTypes) : [selectedType];
+                
+                typesToShow.forEach(poiClass => {
+                    const color = poiTypeColors[poiClass]?.color || '#ff6b6b';
+                    const name = poiTypeColors[poiClass]?.name || poiClass.charAt(0).toUpperCase() + poiClass.slice(1).replace(/_/g, ' ');
+                    
+                    const item = document.createElement('div');
+                    item.style.marginBottom = '3px';
+                    item.innerHTML = `<span style="display: inline-block; width: 12px; height: 12px; background: ${color}; border: 1px solid #fff; border-radius: 50%; margin-right: 5px;"></span>${name}`;
+                    legendContainer.appendChild(item);
+                });
+            }
+            
+            // Update the floating legend panel
+            updateFloatingPoiLegend();
+        }
+        
+        // Update floating POI legend panel (render-only, uses server summary)
+        function updateFloatingPoiLegend() {
+            const legendContent = document.getElementById('poi-legend-content');
+            if (!legendContent) return;
+            
+            const zoom = map.getZoom();
+            if (zoom < 12) {
+                legendContent.innerHTML = '<div class="poi-legend-empty">Zoom in to level 12+ to see POIs</div>';
+                return;
+            }
+            
+            if (!poiSummaryCounts || Object.keys(poiSummaryCounts).length === 0) {
+                legendContent.innerHTML = '<div class="poi-legend-empty">No POI types found in this area</div>';
+                return;
+            }
+            
+            // Sort POI types by count (descending), then alphabetically
+            const selectedType = document.getElementById('poi-filter')?.value || 'all';
+            const types = selectedType === 'all' ? Object.keys(poiSummaryCounts) : [selectedType];
+
+            const sortedTypes = types.sort((a, b) => {
+                const countDiff = (poiSummaryCounts[b] || 0) - (poiSummaryCounts[a] || 0);
+                if (countDiff !== 0) return countDiff;
+                return a.localeCompare(b);
+            });
+            
+            legendContent.innerHTML = '';
+            
+            sortedTypes.forEach(poiClass => {
+                const color = poiTypeColors[poiClass]?.color || '#ff6b6b';
+                const name = poiTypeColors[poiClass]?.name || poiClass.charAt(0).toUpperCase() + poiClass.slice(1).replace(/_/g, ' ');
+                const count = poiSummaryCounts[poiClass] || 0;
+                
+                const item = document.createElement('div');
+                item.className = 'poi-legend-item';
+                item.innerHTML = `
+                    <div class="poi-legend-color" style="background: ${color};"></div>
+                    <span class="poi-legend-name">${name}</span>
+                    ${count > 0 ? `<span class="poi-legend-count">(${count})</span>` : ''}
+                `;
+                legendContent.appendChild(item);
+            });
+        }
+        
+        // Toggle floating legend panel (variables already initialized in map.on('load'))
+
+        // Apply POI filter
+        function applyPoiFilter() {
+            const selectedType = document.getElementById('poi-filter').value;
+            
+            if (selectedType === 'all') {
+                // Show all POIs
+                map.setFilter('poi', null);
+                map.setFilter('poi-hit-area', null);
+            } else {
+                // Filter by selected type
+                map.setFilter('poi', ['==', ['get', 'class'], selectedType]);
+                map.setFilter('poi-hit-area', ['==', ['get', 'class'], selectedType]);
+            }
+            
+            updatePoiLegend();
+            // Re-render legend based on selection (counts already fetched)
+            updateFloatingPoiLegend();
+        }
+
+        document.getElementById('toggle-poi').addEventListener('change', (e) => {
+            const visible = e.target.checked ? 'visible' : 'none';
+            if (map.getLayer('poi')) {
+                map.setLayoutProperty('poi', 'visibility', visible);
+            }
+            if (map.getLayer('poi-hit-area')) {
+                map.setLayoutProperty('poi-hit-area', 'visibility', visible);
+            }
+            if (map.getLayer('poi-labels')) {
+                map.setLayoutProperty('poi-labels', 'visibility', visible);
+            }
+            
+            // Show/hide POI controls
+            document.getElementById('poi-controls').style.display = e.target.checked ? 'block' : 'none';
+            
+            // Show/hide floating legend panel
+            poiLegendPanel.style.display = e.target.checked ? 'block' : 'none';
+            
+            // Refresh POI summary when layer is enabled
+            if (e.target.checked) {
+                schedulePoiSummaryRefresh(200);
+            } else {
+                // Clear legend when disabled
+                document.getElementById('poi-legend-content').innerHTML = '<div class="poi-legend-empty">POI layer disabled</div>';
+            }
+        });
+
+        // POI filter change handler
+        document.getElementById('poi-filter').addEventListener('change', applyPoiFilter);
+        
+        // Update legend counts when map moves or zooms (consolidated handlers)
+        map.on('idle', () => {
+            schedulePoiSummaryRefreshOnce(200);
+        });
+        
+        map.on('moveend', () => {
+            schedulePoiSummaryRefreshOnce(300);
+        });
+        
+        map.on('zoomend', () => {
+            schedulePoiSummaryRefreshOnce(350);
+        });
+        
+        // Also update when data loads
+        map.on('sourcedata', (e) => {
+            if (e.isSourceLoaded && e.sourceId === 'kc-enhanced' && document.getElementById('toggle-poi')?.checked) {
+                schedulePoiSummaryRefreshOnce(150);
+            }
+        });
+
+        document.getElementById('toggle-places').addEventListener('change', (e) => {
+            if (map.getLayer('places')) {
+                map.setLayoutProperty('places', 'visibility', e.target.checked ? 'visible' : 'none');
+            }
+        });
+
         // Census layer toggle
         document.getElementById('toggle-census').addEventListener('change', (e) => {
             const visible = e.target.checked ? 'visible' : 'none';
@@ -723,6 +1339,7 @@
             }
             document.getElementById('census-controls').style.display = e.target.checked ? 'block' : 'none';
             document.getElementById('census-legend').style.display = e.target.checked ? 'block' : 'none';
+            // Keep zipcode info panel visible even if census layer is toggled off
         });
 
         // Census variable selector
@@ -731,43 +1348,227 @@
             updateCensusLayers();
         });
 
-        // Census popup
-        const censusPopup = new maplibregl.Popup({
+        // POI/Place popup for detailed info
+        const featurePopup = new maplibregl.Popup({
             closeButton: true,
             closeOnClick: false
         });
 
-        // Show census data on click
-        map.on('click', 'census-zipcodes-fill', (e) => {
-            const props = e.features[0].properties;
+        // Zipcode info panel elements
+        const zipcodeInfoPanel = document.getElementById('zipcode-info');
+        const zipcodeTitle = document.getElementById('zipcode-title');
+        const zipcodeDetails = document.getElementById('zipcode-details');
+
+        // Function to update zipcode info panel
+        function updateZipcodeInfo(props) {
+            if (!props || !props.ZIPCODE) {
+                zipcodeInfoPanel.style.display = 'none';
+                return;
+            }
+
             const zipcode = props.ZIPCODE;
+            zipcodeTitle.textContent = `Zipcode: ${zipcode}`;
             
-            let html = `<div style="font-weight: bold; margin-bottom: 8px;">Zipcode: ${zipcode}</div>`;
-            html += '<div style="font-size: 12px; line-height: 1.6;">';
+            let html = '';
             
             // Show key statistics
             if (props.B01001_001E != null) {
-                html += `<div><strong>Population:</strong> ${Math.round(props.B01001_001E).toLocaleString()}</div>`;
+                html += `<div style="margin-bottom: 4px;"><strong>Population:</strong> ${Math.round(props.B01001_001E).toLocaleString()}</div>`;
             }
             if (props.B19013_001E != null) {
-                html += `<div><strong>Median Income:</strong> $${Math.round(props.B19013_001E).toLocaleString()}</div>`;
+                html += `<div style="margin-bottom: 4px;"><strong>Median Income:</strong> $${Math.round(props.B19013_001E).toLocaleString()}</div>`;
             }
             if (props.B25077_001E != null) {
-                html += `<div><strong>Median Home Value:</strong> $${Math.round(props.B25077_001E).toLocaleString()}</div>`;
+                html += `<div style="margin-bottom: 4px;"><strong>Median Home Value:</strong> $${Math.round(props.B25077_001E).toLocaleString()}</div>`;
             }
             if (props.B01002_001E != null) {
-                html += `<div><strong>Median Age:</strong> ${Math.round(props.B01002_001E * 10) / 10} years</div>`;
+                html += `<div style="margin-bottom: 4px;"><strong>Median Age:</strong> ${Math.round(props.B01002_001E * 10) / 10} years</div>`;
             }
             if (props.B25003_002E != null && props.B25003_001E != null) {
                 const ownerPct = (props.B25003_002E / props.B25003_001E * 100).toFixed(1);
-                html += `<div><strong>Owner Occupied:</strong> ${ownerPct}%</div>`;
+                html += `<div style="margin-bottom: 4px;"><strong>Owner Occupied:</strong> ${ownerPct}%</div>`;
             }
             
+            if (!html) {
+                html = '<div style="font-style: italic; color: #999;">No data available</div>';
+            }
+            
+            zipcodeDetails.innerHTML = html;
+            zipcodeInfoPanel.style.display = 'block';
+        }
+
+        // Function to show POI info (shared between handlers)
+        function showPoiInfo(e) {
+            // MapLibre events don't have preventDefault/stopPropagation
+            // Check if features exist
+            if (!e.features || e.features.length === 0) {
+                return;
+            }
+            
+            const props = e.features[0].properties;
+            const name = props.name || 'Unnamed POI';
+            const poiClass = props.class || 'Unknown';
+            const subclass = props.subclass || '';
+            
+            let html = `<div style="font-weight: bold; margin-bottom: 8px;">${name}</div>`;
+            html += '<div style="font-size: 12px; line-height: 1.6;">';
+            html += `<div><strong>Type:</strong> ${poiClass}${subclass ? ` (${subclass})` : ''}</div>`;
+            if (props.rank) {
+                html += `<div><strong>Rank:</strong> ${props.rank}</div>`;
+            }
             html += '</div>';
             
-            censusPopup.setLngLat(e.lngLat)
+            featurePopup.setLngLat(e.lngLat)
                 .setHTML(html)
                 .addTo(map);
+            
+            // Also update zipcode info if available at this location
+            const censusFeatures = map.queryRenderedFeatures(e.point, {
+                layers: ['census-zipcodes-fill']
+            });
+            if (censusFeatures.length > 0) {
+                updateZipcodeInfo(censusFeatures[0].properties);
+            }
+        }
+
+        // Show POI information on click - use hit area layer for easier clicking
+        map.on('click', 'poi-hit-area', (e) => {
+            showPoiInfo(e);
+            // Update query center to clicked POI location and lock it
+            poiQueryCenter = e.lngLat;
+            poiQueryCenterLocked = true;
+            // Refresh legend with new center
+            schedulePoiSummaryRefresh(100);
+        });
+        
+        // Fallback: also handle clicks on the visible POI layer
+        map.on('click', 'poi', (e) => {
+            showPoiInfo(e);
+            // Update query center to clicked POI location and lock it
+            poiQueryCenter = e.lngLat;
+            poiQueryCenterLocked = true;
+            // Refresh legend with new center
+            schedulePoiSummaryRefresh(100);
+        });
+        
+        // Allow clicking on map to set query center
+        // Double-click to unlock and return to using visible bounds
+        let lastClickTime = 0;
+        map.on('click', (e) => {
+            const now = Date.now();
+            const isDoubleClick = (now - lastClickTime) < 300;
+            lastClickTime = now;
+            
+            // Double-click unlocks and returns to visible bounds
+            if (isDoubleClick && poiQueryCenterLocked) {
+                poiQueryCenterLocked = false;
+                poiQueryCenter = null;
+                if (document.getElementById('toggle-poi')?.checked) {
+                    schedulePoiSummaryRefreshOnce(100);
+                }
+                return;
+            }
+            
+            // Only set center if not clicking on a POI, place, or building
+            const features = map.queryRenderedFeatures(e.point, {
+                layers: ['poi', 'poi-hit-area', 'places', 'buildings-3d', 'census-zipcodes-fill']
+            });
+            
+            const hasPoiPlace = features.some(f => 
+                f.layer.id === 'poi' || 
+                f.layer.id === 'poi-hit-area' || 
+                f.layer.id === 'places'
+            );
+            
+            if (!hasPoiPlace) {
+                // Clicked on empty space or non-POI feature - set new query center and lock it
+                poiQueryCenter = e.lngLat;
+                poiQueryCenterLocked = true;
+                if (document.getElementById('toggle-poi')?.checked) {
+                    schedulePoiSummaryRefreshOnce(100);
+                }
+            }
+        });
+
+        // Show place information on click
+        map.on('click', 'places', (e) => {
+            // Check if features exist
+            if (!e.features || e.features.length === 0) {
+                return;
+            }
+            
+            const props = e.features[0].properties;
+            const name = props.name || 'Unnamed Place';
+            const placeClass = props.class || 'Unknown';
+            const rank = props.rank || '';
+            
+            let html = `<div style="font-weight: bold; margin-bottom: 8px;">${name}</div>`;
+            html += '<div style="font-size: 12px; line-height: 1.6;">';
+            html += `<div><strong>Type:</strong> ${placeClass}</div>`;
+            if (rank) {
+                html += `<div><strong>Rank:</strong> ${rank}</div>`;
+            }
+            html += '</div>';
+            
+            featurePopup.setLngLat(e.lngLat)
+                .setHTML(html)
+                .addTo(map);
+            
+            // Also update zipcode info if available at this location
+            const censusFeatures = map.queryRenderedFeatures(e.point, {
+                layers: ['census-zipcodes-fill']
+            });
+            if (censusFeatures.length > 0) {
+                updateZipcodeInfo(censusFeatures[0].properties);
+            }
+        });
+
+        // Change cursor on POI/place hover (use hit area for better detection)
+        map.on('mouseenter', 'poi-hit-area', () => {
+            map.getCanvas().style.cursor = 'pointer';
+        });
+        map.on('mouseleave', 'poi-hit-area', () => {
+            map.getCanvas().style.cursor = '';
+        });
+        
+        // Also handle visible POI layer for hover feedback
+        map.on('mouseenter', 'poi', () => {
+            map.getCanvas().style.cursor = 'pointer';
+        });
+        map.on('mouseleave', 'poi', () => {
+            map.getCanvas().style.cursor = '';
+        });
+
+        map.on('mouseenter', 'places', () => {
+            map.getCanvas().style.cursor = 'pointer';
+        });
+        map.on('mouseleave', 'places', () => {
+            map.getCanvas().style.cursor = '';
+        });
+
+        // Update zipcode info on hover over census areas
+        map.on('mousemove', 'census-zipcodes-fill', (e) => {
+            if (e.features && e.features.length > 0) {
+                updateZipcodeInfo(e.features[0].properties);
+            }
+        });
+
+        // Update zipcode info on click (but don't show popup, let POI/places handle their own)
+        map.on('click', 'census-zipcodes-fill', (e) => {
+            // Only update if we didn't click on a POI or place
+            const poiFeatures = map.queryRenderedFeatures(e.point, {
+                layers: ['poi', 'poi-hit-area', 'places']
+            });
+            
+            if (poiFeatures.length === 0 && e.features && e.features.length > 0) {
+                updateZipcodeInfo(e.features[0].properties);
+            }
+        });
+
+        // Hide zipcode info when mouse leaves census area
+        map.on('mouseleave', 'census-zipcodes-fill', () => {
+            // Keep the info visible after click, only hide on mouseleave if not clicked
+            // We'll handle this with a flag or just leave it visible
         });
 
         // Change cursor on hover
@@ -775,8 +1576,43 @@
             map.getCanvas().style.cursor = 'pointer';
         });
 
-        map.on('mouseleave', 'census-zipcodes-fill', () => {
-            map.getCanvas().style.cursor = '';
+        // Update zipcode info when clicking anywhere on the map (if census data is available)
+        // This is a fallback for clicks that don't hit specific features
+        map.on('click', (e) => {
+            // Check if we clicked on a POI, place, or building first
+            const featureLayers = map.queryRenderedFeatures(e.point, {
+                layers: ['poi', 'poi-hit-area', 'places', 'buildings-3d', 'census-zipcodes-fill']
+            });
+            
+            // If we clicked on a census area and not on POI/place/building, update zipcode info
+            const censusFeature = featureLayers.find(f => f.layer.id === 'census-zipcodes-fill');
+            const hasPoiPlace = featureLayers.some(f => f.layer.id === 'poi' || f.layer.id === 'poi-hit-area' || f.layer.id === 'places' || f.layer.id === 'buildings-3d');
+            
+            if (censusFeature && !hasPoiPlace) {
+                updateZipcodeInfo(censusFeature.properties);
+            }
+        });
+
+        // Update zipcode info on mouse move (optional - can be removed if too frequent)
+        let zipcodeHoverTimeout;
+        map.on('mousemove', (e) => {
+            // Only update on hover if census layer is visible and we're not over POI/places
+            if (!map.getLayer('census-zipcodes-fill') || 
+                map.getLayoutProperty('census-zipcodes-fill', 'visibility') === 'none') {
+                return;
+            }
+
+            // Debounce the hover updates
+            clearTimeout(zipcodeHoverTimeout);
+            zipcodeHoverTimeout = setTimeout(() => {
+                const features = map.queryRenderedFeatures(e.point, {
+                    layers: ['census-zipcodes-fill']
+                });
+                
+                if (features.length > 0) {
+                    updateZipcodeInfo(features[0].properties);
+                }
+            }, 100); // 100ms debounce
         });
 
         // Address search functionality using Nominatim

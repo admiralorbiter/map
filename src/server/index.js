@@ -18,6 +18,7 @@ const createSimulationRoutes = require('./routes/simulation');
 const errorHandler = require('./middleware/errorHandler');
 const createDataPipeline = require('../systems/data-pipeline');
 const CensusSource = require('../systems/data-pipeline/sources/census-source');
+const SpatialService = require('../systems/api/spatial-service');
 
 class Server {
   constructor() {
@@ -25,6 +26,7 @@ class Server {
     this.port = config.port;
     this.tileServer = null;
     this.dataPipeline = null; // Will be initialized in Phase 2
+    this.spatialService = null;
     this.simulation = null; // Will be initialized in Phase 3
   }
 
@@ -55,6 +57,9 @@ class Server {
 
     // Initialize all sources
     await this.dataPipeline.initialize();
+
+    // Initialize spatial service for OSM feature extraction
+    this.spatialService = new SpatialService(this.tileServer);
 
     // TODO: Initialize simulation (Phase 3)
     // this.simulation = require('../systems/simulation')({ dataPipeline: this.dataPipeline });
@@ -90,7 +95,7 @@ class Server {
     this.app.use(createHealthRoutes(this.tileServer));
 
     // Data API routes
-    this.app.use(createDataRoutes(this.dataPipeline));
+    this.app.use(createDataRoutes(this.dataPipeline, this.spatialService));
 
     // Simulation API routes
     this.app.use(createSimulationRoutes(this.simulation));

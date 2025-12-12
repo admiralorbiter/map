@@ -6,7 +6,7 @@
 const express = require('express');
 const router = express.Router();
 
-function createDataRoutes(dataPipeline) {
+function createDataRoutes(dataPipeline, spatialService) {
   // Get data by location
   router.get('/api/v1/data/location', async (req, res) => {
     try {
@@ -155,6 +155,50 @@ function createDataRoutes(dataPipeline) {
     } catch (error) {
       console.error('Error getting metadata:', error);
       res.status(500).json({ error: 'Failed to get metadata', message: error.message });
+    }
+  });
+
+  // Get OSM features by layer
+  router.get('/api/v1/osm/:layer', async (req, res) => {
+    try {
+      const { layer } = req.params;
+      const { bounds, source = 'kc-enhanced', zoom = 14, summary } = req.query;
+      
+      if (!bounds) {
+        return res.status(400).json({ error: 'bounds parameter required (format: minLon,minLat,maxLon,maxLat)' });
+      }
+
+      if (!spatialService) {
+        return res.status(503).json({ error: 'Spatial service not available' });
+      }
+
+      // Parse bounds: "minLon,minLat,maxLon,maxLat"
+      const [minLon, minLat, maxLon, maxLat] = bounds.split(',').map(parseFloat);
+      
+      if (isNaN(minLon) || isNaN(minLat) || isNaN(maxLon) || isNaN(maxLat)) {
+        return res.status(400).json({ error: 'Invalid bounds format. Use: minLon,minLat,maxLon,maxLat' });
+      }
+
+      const features = await spatialService.get_osm_features({
+        source,
+        layer,
+        bounds: { minLon, minLat, maxLon, maxLat },
+        zoom: parseInt(zoom) || 14,
+        summaryBy: summary || undefined
+      });
+
+      // If summary is requested, return JSON summary (not GeoJSON)
+      if (summary) {
+        res.setHeader('Content-Type', 'application/json');
+        return res.json(features);
+      }
+
+      // Set proper headers for GeoJSON
+      res.setHeader('Content-Type', 'application/geo+json');
+      return res.json(features);
+    } catch (error) {
+      console.error('Error getting OSM features:', error);
+      res.status(500).json({ error: 'Failed to get OSM features', message: error.message });
     }
   });
 
