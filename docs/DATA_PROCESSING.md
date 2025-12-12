@@ -128,6 +128,16 @@ This will:
 
 **Note**: This process may take 10-30 minutes depending on API rate limits and data volume.
 
+#### Step 3: Convert Geometry to WKT (Recommended)
+
+For map visualization, convert geometry to WKT format:
+
+```powershell
+python convert_geometry_to_wkt.py
+```
+
+This adds a `geometry_wkt` column that makes geometry accessible without spatialite extensions. Required for the GeoJSON API endpoint.
+
 ### Data Categories
 
 The following ACS data categories are imported:

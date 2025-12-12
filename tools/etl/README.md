@@ -79,6 +79,21 @@ python load_acs_zipcode_data.py
 
 **Note:** Run `load_tiger_zipcode_boundaries.py` first, as ACS script filters to existing boundaries.
 
+### Convert Geometry to WKT (Optional but Recommended)
+
+For better compatibility with Node.js GeoJSON export, convert geometry to WKT:
+
+```bash
+python convert_geometry_to_wkt.py
+```
+
+**What it does:**
+- Adds a `geometry_wkt` column to the zipcodes layer
+- Makes geometry accessible without spatialite extension
+- Required for GeoJSON API endpoint to work properly
+
+**Note:** If you have spatialite extension available in Node.js, this step is optional.
+
 ## Data Schema
 
 ### GPKG Structure

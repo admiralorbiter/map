@@ -158,6 +158,46 @@ function createDataRoutes(dataPipeline) {
     }
   });
 
+  // Get zipcode boundaries as GeoJSON
+  router.get('/api/v1/data/census/geojson', async (req, res) => {
+    try {
+      const { bounds, variable } = req.query;
+      
+      if (dataPipeline) {
+        const sourceInstance = dataPipeline.sources.get('census');
+        
+        if (!sourceInstance) {
+          return res.status(404).json({ error: 'Census source not found' });
+        }
+        
+        if (typeof sourceInstance.getZipcodesGeoJSON !== 'function') {
+          return res.status(400).json({ error: 'Census source does not support GeoJSON export' });
+        }
+
+        // Parse bounds if provided
+        let boundsObj = null;
+        if (bounds) {
+          const [minLon, minLat, maxLon, maxLat] = bounds.split(',').map(parseFloat);
+          boundsObj = { minLon, minLat, maxLon, maxLat };
+        }
+
+        const geojson = await sourceInstance.getZipcodesGeoJSON({
+          bounds: boundsObj,
+          variable
+        });
+
+        // Set proper headers for GeoJSON
+        res.setHeader('Content-Type', 'application/geo+json');
+        return res.json(geojson);
+      }
+
+      res.status(503).json({ error: 'Data pipeline not available' });
+    } catch (error) {
+      console.error('Error getting GeoJSON:', error);
+      res.status(500).json({ error: 'Failed to get GeoJSON', message: error.message });
+    }
+  });
+
   return router;
 }
 

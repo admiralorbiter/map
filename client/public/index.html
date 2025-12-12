@@ -142,6 +142,20 @@
             <label><input type="checkbox" id="toggle-roads" checked> Roads</label>
             <label><input type="checkbox" id="toggle-water" checked> Water</label>
             <label><input type="checkbox" id="toggle-landuse" checked> Land Use</label>
+            <label><input type="checkbox" id="toggle-census" checked> Census Data</label>
+        </div>
+        <div class="census-controls" id="census-controls" style="margin-top: 10px; padding-top: 10px; border-top: 1px solid #ddd;">
+            <label style="display: block; margin-bottom: 5px; font-size: 12px; font-weight: bold;">Variable:</label>
+            <select id="census-variable" style="width: 100%; padding: 5px; font-size: 12px;">
+                <option value="B19013_001E">Median Household Income</option>
+                <option value="B01001_001E">Total Population</option>
+                <option value="B25077_001E">Median Home Value</option>
+                <option value="B01002_001E">Median Age</option>
+            </select>
+        </div>
+        <div class="census-legend" id="census-legend" style="margin-top: 10px; padding: 5px; background: rgba(255,255,255,0.9); border-radius: 3px; font-size: 11px; display: none;">
+            <div style="font-weight: bold; margin-bottom: 5px;" id="legend-title">Median Household Income</div>
+            <div id="legend-scale"></div>
         </div>
     </div>
     
@@ -303,10 +317,232 @@
             map.addControl(new maplibregl.TerrainControl(), 'top-right');
         }
 
+        // Census data state
+        let censusData = null;
+        let currentVariable = 'B19013_001E';
+        const variableNames = {
+            'B19013_001E': 'Median Household Income',
+            'B01001_001E': 'Total Population',
+            'B25077_001E': 'Median Home Value',
+            'B01002_001E': 'Median Age'
+        };
+
+        // Color scales for different variables
+        function getColorScale(variable) {
+            switch(variable) {
+                case 'B19013_001E': // Income - YlOrRd
+                    return [
+                        [0, '#ffffcc'],
+                        [30000, '#ffeda0'],
+                        [50000, '#fed976'],
+                        [70000, '#feb24c'],
+                        [90000, '#fd8d3c'],
+                        [110000, '#fc4e2a'],
+                        [150000, '#e31a1c'],
+                        [200000, '#bd0026']
+                    ];
+                case 'B01001_001E': // Population - Blues
+                    return [
+                        [0, '#f7fbff'],
+                        [1000, '#deebf7'],
+                        [5000, '#c6dbef'],
+                        [10000, '#9ecae1'],
+                        [20000, '#6baed6'],
+                        [30000, '#4292c6'],
+                        [50000, '#2171b5'],
+                        [100000, '#084594']
+                    ];
+                case 'B25077_001E': // Home Value - Purples
+                    return [
+                        [0, '#fcfbfd'],
+                        [50000, '#efedf5'],
+                        [100000, '#dadaeb'],
+                        [150000, '#bcbddc'],
+                        [200000, '#9e9ac8'],
+                        [250000, '#807dba'],
+                        [300000, '#6a51a3'],
+                        [400000, '#54278f']
+                    ];
+                case 'B01002_001E': // Age - Oranges
+                    return [
+                        [0, '#fff5eb'],
+                        [25, '#fee6ce'],
+                        [30, '#fdd0a2'],
+                        [35, '#fdae6b'],
+                        [40, '#fd8d3c'],
+                        [45, '#f16913'],
+                        [50, '#d94801'],
+                        [60, '#8c2d04']
+                    ];
+                default:
+                    return [
+                        [0, '#f7f7f7'],
+                        [100, '#cccccc'],
+                        [500, '#969696'],
+                        [1000, '#636363'],
+                        [5000, '#252525']
+                    ];
+            }
+        }
+
+        // Load census data (with optional bounds for viewport-based loading)
+        async function loadCensusData(useBounds = false) {
+            try {
+                let url = '/api/v1/data/census/geojson';
+                
+                // Add bounds if requested and map is loaded
+                if (useBounds && map.loaded()) {
+                    const bounds = map.getBounds();
+                    const minLon = bounds.getWest();
+                    const minLat = bounds.getSouth();
+                    const maxLon = bounds.getEast();
+                    const maxLat = bounds.getNorth();
+                    url += `?bounds=${minLon},${minLat},${maxLon},${maxLat}`;
+                }
+                
+                const response = await fetch(url);
+                if (!response.ok) {
+                    throw new Error('Failed to load census data');
+                }
+                censusData = await response.json();
+                
+                // Add source to map
+                if (map.getSource('census-zipcodes')) {
+                    map.getSource('census-zipcodes').setData(censusData);
+                } else {
+                    map.addSource('census-zipcodes', {
+                        type: 'geojson',
+                        data: censusData
+                    });
+                }
+                
+                // Add or update layers
+                updateCensusLayers();
+                
+                console.log('Census data loaded:', censusData.features.length, 'zipcodes');
+            } catch (error) {
+                console.error('Error loading census data:', error);
+                document.querySelector('.map-overlay p').textContent = 'Error loading census data. Make sure geometry is converted to WKT.';
+            }
+        }
+
+        // Debounce function for viewport updates
+        let viewportUpdateTimeout = null;
+        function debounceViewportUpdate() {
+            if (viewportUpdateTimeout) {
+                clearTimeout(viewportUpdateTimeout);
+            }
+            viewportUpdateTimeout = setTimeout(() => {
+                // Only reload if census layer is visible
+                if (document.getElementById('toggle-census').checked) {
+                    loadCensusData(true);
+                }
+            }, 500); // Wait 500ms after map stops moving
+        }
+
+        // Update census layers with current variable
+        function updateCensusLayers() {
+            if (!censusData || !map.getSource('census-zipcodes')) return;
+
+            const colorScale = getColorScale(currentVariable);
+            
+            // Calculate min/max for the current variable
+            const values = censusData.features
+                .map(f => f.properties[currentVariable])
+                .filter(v => v != null && !isNaN(v));
+            
+            if (values.length === 0) return;
+            
+            const min = Math.min(...values);
+            const max = Math.max(...values);
+
+            // Remove existing layers if they exist
+            if (map.getLayer('census-zipcodes-fill')) {
+                map.removeLayer('census-zipcodes-fill');
+            }
+            if (map.getLayer('census-zipcodes-outline')) {
+                map.removeLayer('census-zipcodes-outline');
+            }
+
+            // Add fill layer
+            map.addLayer({
+                id: 'census-zipcodes-fill',
+                type: 'fill',
+                source: 'census-zipcodes',
+                paint: {
+                    'fill-color': [
+                        'interpolate',
+                        ['linear'],
+                        ['get', currentVariable],
+                        ...colorScale.flat()
+                    ],
+                    'fill-opacity': 0.6
+                }
+            }, 'buildings-3d'); // Insert before buildings
+
+            // Add outline layer
+            map.addLayer({
+                id: 'census-zipcodes-outline',
+                type: 'line',
+                source: 'census-zipcodes',
+                paint: {
+                    'line-color': '#666',
+                    'line-width': 1,
+                    'line-opacity': 0.8
+                }
+            }, 'census-zipcodes-fill');
+
+            // Update legend
+            updateLegend(currentVariable, min, max, colorScale);
+        }
+
+        // Update legend
+        function updateLegend(variable, min, max, colorScale) {
+            const legendTitle = document.getElementById('legend-title');
+            const legendScale = document.getElementById('legend-scale');
+            const legendDiv = document.getElementById('census-legend');
+            
+            legendTitle.textContent = variableNames[variable] || variable;
+            
+            // Create color scale visualization
+            let html = '<div style="display: flex; align-items: center; margin-top: 5px;">';
+            html += '<div style="width: 20px; height: 100px; background: linear-gradient(to top, ';
+            colorScale.forEach(([value, color], i) => {
+                if (i > 0) html += ', ';
+                html += color;
+            });
+            html += '); border: 1px solid #ccc; margin-right: 5px;"></div>';
+            html += '<div style="display: flex; flex-direction: column; justify-content: space-between; height: 100px; font-size: 10px;">';
+            html += `<div>${formatValue(max, variable)}</div>`;
+            html += `<div>${formatValue(min, variable)}</div>`;
+            html += '</div></div>';
+            
+            legendScale.innerHTML = html;
+            legendDiv.style.display = 'block';
+        }
+
+        // Format value based on variable type
+        function formatValue(value, variable) {
+            if (variable === 'B19013_001E' || variable === 'B25077_001E') {
+                return '$' + Math.round(value).toLocaleString();
+            } else if (variable === 'B01001_001E') {
+                return Math.round(value).toLocaleString();
+            } else {
+                return Math.round(value * 10) / 10;
+            }
+        }
+
         // Handle map load events
         map.on('load', () => {
             console.log('Map loaded successfully');
             document.querySelector('.map-overlay p').textContent = '3D Map loaded - Right-click + drag to rotate, scroll to zoom';
+            
+            // Load census data (load all initially, then use viewport-based on move)
+            loadCensusData(false);
+            
+            // Update census data when viewport changes (debounced)
+            map.on('moveend', debounceViewportUpdate);
+            map.on('zoomend', debounceViewportUpdate);
             
             // Terrain settings - set to false to disable terrain entirely
             const ENABLE_TERRAIN = true;
@@ -474,6 +710,73 @@
 
         document.getElementById('toggle-landuse').addEventListener('change', (e) => {
             map.setLayoutProperty('landuse', 'visibility', e.target.checked ? 'visible' : 'none');
+        });
+
+        // Census layer toggle
+        document.getElementById('toggle-census').addEventListener('change', (e) => {
+            const visible = e.target.checked ? 'visible' : 'none';
+            if (map.getLayer('census-zipcodes-fill')) {
+                map.setLayoutProperty('census-zipcodes-fill', 'visibility', visible);
+            }
+            if (map.getLayer('census-zipcodes-outline')) {
+                map.setLayoutProperty('census-zipcodes-outline', 'visibility', visible);
+            }
+            document.getElementById('census-controls').style.display = e.target.checked ? 'block' : 'none';
+            document.getElementById('census-legend').style.display = e.target.checked ? 'block' : 'none';
+        });
+
+        // Census variable selector
+        document.getElementById('census-variable').addEventListener('change', (e) => {
+            currentVariable = e.target.value;
+            updateCensusLayers();
+        });
+
+        // Census popup
+        const censusPopup = new maplibregl.Popup({
+            closeButton: true,
+            closeOnClick: false
+        });
+
+        // Show census data on click
+        map.on('click', 'census-zipcodes-fill', (e) => {
+            const props = e.features[0].properties;
+            const zipcode = props.ZIPCODE;
+            
+            let html = `<div style="font-weight: bold; margin-bottom: 8px;">Zipcode: ${zipcode}</div>`;
+            html += '<div style="font-size: 12px; line-height: 1.6;">';
+            
+            // Show key statistics
+            if (props.B01001_001E != null) {
+                html += `<div><strong>Population:</strong> ${Math.round(props.B01001_001E).toLocaleString()}</div>`;
+            }
+            if (props.B19013_001E != null) {
+                html += `<div><strong>Median Income:</strong> $${Math.round(props.B19013_001E).toLocaleString()}</div>`;
+            }
+            if (props.B25077_001E != null) {
+                html += `<div><strong>Median Home Value:</strong> $${Math.round(props.B25077_001E).toLocaleString()}</div>`;
+            }
+            if (props.B01002_001E != null) {
+                html += `<div><strong>Median Age:</strong> ${Math.round(props.B01002_001E * 10) / 10} years</div>`;
+            }
+            if (props.B25003_002E != null && props.B25003_001E != null) {
+                const ownerPct = (props.B25003_002E / props.B25003_001E * 100).toFixed(1);
+                html += `<div><strong>Owner Occupied:</strong> ${ownerPct}%</div>`;
+            }
+            
+            html += '</div>';
+            
+            censusPopup.setLngLat(e.lngLat)
+                .setHTML(html)
+                .addTo(map);
+        });
+
+        // Change cursor on hover
+        map.on('mouseenter', 'census-zipcodes-fill', () => {
+            map.getCanvas().style.cursor = 'pointer';
+        });
+
+        map.on('mouseleave', 'census-zipcodes-fill', () => {
+            map.getCanvas().style.cursor = '';
         });
 
         // Address search functionality using Nominatim
