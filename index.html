@@ -1,0 +1,471 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kansas-Missouri OSM Map</title>
+    
+    <!-- MapLibre GL JS CSS -->
+    <link href="https://unpkg.com/maplibre-gl@^5.14.0/dist/maplibre-gl.css" rel="stylesheet" />
+    
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: Arial, sans-serif;
+        }
+        
+        #map {
+            width: 100vw;
+            height: 100vh;
+        }
+        
+        .map-overlay {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: rgba(255, 255, 255, 0.95);
+            padding: 10px;
+            border-radius: 5px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+            z-index: 1;
+            max-width: 300px;
+        }
+        
+        .layer-controls {
+            margin-top: 10px;
+            padding-top: 10px;
+            border-top: 1px solid #ddd;
+        }
+        
+        .layer-controls label {
+            display: block;
+            margin: 5px 0;
+            font-size: 12px;
+            cursor: pointer;
+        }
+        
+        .layer-controls input[type="checkbox"] {
+            margin-right: 5px;
+        }
+        
+        .building-info {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            background: rgba(255, 255, 255, 0.95);
+            padding: 10px;
+            border-radius: 5px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+            z-index: 1;
+            display: none;
+            max-width: 250px;
+        }
+        
+        .building-info h4 {
+            margin: 0 0 5px 0;
+            font-size: 14px;
+        }
+        
+        .building-info p {
+            margin: 3px 0;
+            font-size: 12px;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <div id="map"></div>
+    <div class="map-overlay">
+        <h3 style="margin: 0 0 5px 0;">Kansas City 3D Map</h3>
+        <p style="margin: 0; font-size: 12px; color: #666;">Loading tiles from local server...</p>
+        <p style="margin: 5px 0 0 0; font-size: 11px; color: #888;">
+            Right-click + drag to rotate | Scroll to zoom | Click buildings for info
+        </p>
+        <div class="layer-controls">
+            <label><input type="checkbox" id="toggle-buildings" checked> Buildings</label>
+            <label><input type="checkbox" id="toggle-roads" checked> Roads</label>
+            <label><input type="checkbox" id="toggle-water" checked> Water</label>
+            <label><input type="checkbox" id="toggle-landuse" checked> Land Use</label>
+        </div>
+    </div>
+    
+    <div class="building-info" id="building-info">
+        <h4>Building Information</h4>
+        <p id="building-height">Height: -</p>
+        <p id="building-levels">Levels: -</p>
+        <p id="building-type">Type: -</p>
+    </div>
+
+    <!-- MapLibre GL JS -->
+    <script src="https://unpkg.com/maplibre-gl@^5.14.0/dist/maplibre-gl.js"></script>
+    
+    <script>
+        // Performance optimizations - RTL plugin is optional
+        try {
+            maplibregl.setRTLTextPlugin('https://unpkg.com/@mapbox/mapbox-gl-rtl-text@0.2.3/mapbox-gl-rtl-text.min.js');
+        } catch (e) {
+            // RTL plugin not critical, continue without it
+            console.warn('RTL plugin not available (this is OK)');
+        }
+
+        // Initialize the map with 3D support and performance settings
+        const map = new maplibregl.Map({
+            container: 'map',
+            // Performance optimizations
+            antialias: true,
+            preserveDrawingBuffer: false,
+            fadeDuration: 0,
+            style: {
+                version: 8,
+                sources: {
+                    // Try KC enhanced first, fallback to original
+                    'kc-enhanced': {
+                        type: 'vector',
+                        tiles: [`http://localhost:8080/data/kc-enhanced/{z}/{x}/{y}.pbf`],
+                        minzoom: 0,
+                        maxzoom: 15
+                    },
+                    'ks-mo': {
+                        type: 'vector',
+                        tiles: [`http://localhost:8080/data/ks-mo/{z}/{x}/{y}.pbf`],
+                        minzoom: 0,
+                        maxzoom: 15  // Planetiler max is 15
+                    },
+                    // Terrain/elevation data source - AWS Terrain Tiles (free, no API key needed)
+                    'terrain-rgb': {
+                        type: 'raster-dem',
+                        tiles: [
+                            'https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png'
+                        ],
+                        tileSize: 256,
+                        maxzoom: 14,
+                        attribution: 'AWS Terrain Tiles'
+                    }
+                },
+                layers: [
+                    {
+                        id: 'background',
+                        type: 'background',
+                        paint: {
+                            'background-color': '#ffffff'  // White instead of gray for better appearance
+                        }
+                    },
+                    {
+                        id: 'water',
+                        type: 'fill',
+                        source: 'ks-mo',
+                        'source-layer': 'water',
+                        paint: {
+                            'fill-color': '#4a90e2',
+                            'fill-opacity': 0.6
+                        }
+                    },
+                    {
+                        id: 'landuse',
+                        type: 'fill',
+                        source: 'ks-mo',
+                        'source-layer': 'landuse',
+                        paint: {
+                            'fill-color': '#e8e8e8',
+                            'fill-opacity': 0.4
+                        }
+                    },
+                    {
+                        id: 'roads',
+                        type: 'line',
+                        source: 'ks-mo',
+                        'source-layer': 'transportation',
+                        paint: {
+                            'line-color': '#666',
+                            'line-width': [
+                                'interpolate',
+                                ['linear'],
+                                ['zoom'],
+                                10, 1,
+                                12, 2,
+                                14, 4,
+                                16, 6,
+                                18, 8,
+                                20, 10
+                            ]
+                        }
+                    },
+                    {
+                        id: 'buildings-3d',
+                        type: 'fill-extrusion',
+                        source: 'ks-mo',
+                        'source-layer': 'building',
+                        minzoom: 10,  // Show buildings at lower zoom for street view
+                        paint: {
+                            'fill-extrusion-color': '#d0d0d0',
+                            'fill-extrusion-height': [
+                                'case',
+                                ['has', 'render_height'],
+                                ['get', 'render_height'],
+                                ['has', 'height'],
+                                ['get', 'height'],
+                                ['has', 'building:levels'],
+                                ['*', ['get', 'building:levels'], 3],
+                                8
+                            ],
+                            'fill-extrusion-base': 0,
+                            'fill-extrusion-opacity': 0.9
+                        }
+                    }
+                ],
+                // Enable 3D terrain (optional - will be added after map loads if available)
+                // terrain: {
+                //     source: 'terrain-rgb',
+                //     exaggeration: 1.5
+                // }
+            },
+            center: [-94.5786, 39.0997], // Kansas City area for better 3D view
+            zoom: 13,
+            pitch: 40, // Reduced pitch for less distortion (was 50)
+            bearing: 0, // Rotation angle
+            // Performance settings
+            maxPitch: 60,
+            maxZoom: 22,  // Allow overzooming beyond tile maxzoom for closer views
+            minZoom: 10,
+            // Optimize rendering
+            renderWorldCopies: false
+        });
+
+        // Removed tile prefetching - was causing errors
+
+        // Add navigation controls
+        map.addControl(new maplibregl.NavigationControl(), 'top-right');
+
+        // Add terrain control (if available)
+        if (maplibregl.TerrainControl) {
+            map.addControl(new maplibregl.TerrainControl(), 'top-right');
+        }
+
+        // Handle map load events
+        map.on('load', () => {
+            console.log('Map loaded successfully');
+            document.querySelector('.map-overlay p').textContent = '3D Map loaded - Right-click + drag to rotate, scroll to zoom';
+            
+            // Terrain settings - set to false to disable terrain entirely
+            const ENABLE_TERRAIN = true;
+            const TERRAIN_EXAGGERATION = 0.1; // Very subtle - just enough to add slight depth
+            
+            // Try to enable terrain after map loads with reduced exaggeration
+            if (ENABLE_TERRAIN) {
+                setTimeout(() => {
+                    try {
+                        const terrainSource = map.getSource('terrain-rgb');
+                        if (terrainSource) {
+                            // Very low exaggeration for realistic appearance - Kansas City is relatively flat
+                            map.setTerrain({
+                                source: 'terrain-rgb',
+                                exaggeration: TERRAIN_EXAGGERATION
+                            });
+                            console.log(`3D terrain enabled with exaggeration: ${TERRAIN_EXAGGERATION}`);
+                        } else {
+                            console.log('Terrain source not available - continuing without terrain');
+                        }
+                    } catch (err) {
+                        console.warn('Could not enable terrain (this is OK):', err.message);
+                    }
+                }, 2000);
+            } else {
+                console.log('Terrain disabled by configuration');
+            }
+            
+            // Sky configuration removed - causing errors and not critical for 3D visualization
+            
+            // Performance monitoring
+            let frameCount = 0;
+            let lastTime = performance.now();
+            
+            const monitorPerformance = () => {
+                frameCount++;
+                const currentTime = performance.now();
+                if (currentTime >= lastTime + 1000) {
+                    const fps = Math.round((frameCount * 1000) / (currentTime - lastTime));
+                    if (fps < 30) {
+                        console.warn(`Low FPS detected: ${fps}. Consider reducing detail or zoom level.`);
+                    }
+                    frameCount = 0;
+                    lastTime = currentTime;
+                }
+                requestAnimationFrame(monitorPerformance);
+            };
+            
+            // Start performance monitoring
+            requestAnimationFrame(monitorPerformance);
+            
+            // Check available source layers and fix layer names if needed
+            const checkSource = (sourceId) => {
+                try {
+                    const source = map.getSource(sourceId);
+                    if (source && source.vectorLayerIds) {
+                        const layers = source.vectorLayerIds;
+                        console.log(`Available layers in ${sourceId}:`, layers);
+                        
+                        // Fix building layer if needed
+                        if (map.getLayer('buildings-3d')) {
+                            if (layers.includes('buildings') && !layers.includes('building')) {
+                                console.log('Switching building layer to "buildings"');
+                                map.setLayoutProperty('buildings-3d', 'source-layer', 'buildings');
+                            }
+                        }
+                        
+                        // Fix other layers if needed
+                        ['water', 'landuse', 'roads'].forEach(layerId => {
+                            if (map.getLayer(layerId)) {
+                                const currentSource = map.getLayer(layerId).source;
+                                if (currentSource === sourceId) {
+                                    // Check if source-layer exists
+                                    const currentSourceLayer = map.getLayer(layerId)['source-layer'];
+                                    if (!layers.includes(currentSourceLayer)) {
+                                        console.warn(`Layer ${layerId} source-layer "${currentSourceLayer}" not found. Available:`, layers);
+                                    }
+                                }
+                            }
+                        });
+                    }
+                } catch (err) {
+                    console.warn(`Could not check source ${sourceId}:`, err.message);
+                }
+            };
+            
+            // Check source after it loads
+            map.on('sourcedata', (e) => {
+                if (e.isSourceLoaded && e.sourceId === 'ks-mo') {
+                    checkSource('ks-mo');
+                }
+            });
+        });
+
+        // Add keyboard controls for 3D navigation
+        document.addEventListener('keydown', (e) => {
+            const currentPitch = map.getPitch();
+            const currentBearing = map.getBearing();
+            
+            switch(e.key) {
+                case 'ArrowUp':
+                    map.setPitch(Math.min(currentPitch + 5, 60));
+                    break;
+                case 'ArrowDown':
+                    map.setPitch(Math.max(currentPitch - 5, 0));
+                    break;
+                case 'ArrowLeft':
+                    map.setBearing(currentBearing - 15);
+                    break;
+                case 'ArrowRight':
+                    map.setBearing(currentBearing + 15);
+                    break;
+            }
+        });
+
+        // Building hover and click interactivity
+        const buildingInfo = document.getElementById('building-info');
+        const buildingHeightEl = document.getElementById('building-height');
+        const buildingLevelsEl = document.getElementById('building-levels');
+        const buildingTypeEl = document.getElementById('building-type');
+
+        // Change cursor on hover over buildings
+        map.on('mouseenter', 'buildings-3d', () => {
+            map.getCanvas().style.cursor = 'pointer';
+        });
+
+        map.on('mouseleave', 'buildings-3d', () => {
+            map.getCanvas().style.cursor = '';
+            buildingInfo.style.display = 'none';
+        });
+
+        // Show building info on click
+        map.on('click', 'buildings-3d', (e) => {
+            const features = e.features;
+            if (features.length > 0) {
+                const props = features[0].properties;
+                const height = props.render_height || props.height || (props['building:levels'] ? props['building:levels'] * 3 : 'Unknown');
+                const levels = props['building:levels'] || 'Unknown';
+                const type = props.building || props['building:use'] || 'Unknown';
+                
+                buildingHeightEl.textContent = `Height: ${height}${typeof height === 'number' ? 'm' : ''}`;
+                buildingLevelsEl.textContent = `Levels: ${levels}`;
+                buildingTypeEl.textContent = `Type: ${type}`;
+                
+                buildingInfo.style.display = 'block';
+            }
+        });
+
+        // Layer toggles
+        document.getElementById('toggle-buildings').addEventListener('change', (e) => {
+            map.setLayoutProperty('buildings-3d', 'visibility', e.target.checked ? 'visible' : 'none');
+        });
+
+        document.getElementById('toggle-roads').addEventListener('change', (e) => {
+            if (map.getLayer('roads')) {
+                map.setLayoutProperty('roads', 'visibility', e.target.checked ? 'visible' : 'none');
+            }
+        });
+
+        document.getElementById('toggle-water').addEventListener('change', (e) => {
+            if (map.getLayer('water')) {
+                map.setLayoutProperty('water', 'visibility', e.target.checked ? 'visible' : 'none');
+            }
+        });
+
+        document.getElementById('toggle-landuse').addEventListener('change', (e) => {
+            map.setLayoutProperty('landuse', 'visibility', e.target.checked ? 'visible' : 'none');
+        });
+
+        // Optimize rendering during camera movements
+        map.on('movestart', () => {
+            // Reduce detail during movement for better performance
+            if (map.getLayer('buildings-3d')) {
+                map.setPaintProperty('buildings-3d', 'fill-extrusion-opacity', 0.7);
+            }
+        });
+
+        map.on('moveend', () => {
+            // Restore full detail when movement stops
+            if (map.getLayer('buildings-3d')) {
+                map.setPaintProperty('buildings-3d', 'fill-extrusion-opacity', 0.9);
+            }
+        });
+
+        map.on('error', (e) => {
+            console.error('Map error:', e);
+            console.error('Error type:', e.type);
+            console.error('Error error:', e.error);
+            if (e.error) {
+                console.error('Error message:', e.error.message);
+                console.error('Error stack:', e.error.stack);
+            }
+            // Try to get more details
+            try {
+                console.error('Full error object:', JSON.stringify(e, Object.getOwnPropertyNames(e), 2));
+            } catch (err) {
+                console.error('Could not stringify error:', err);
+            }
+            const errorMsg = e.error ? (e.error.message || String(e.error)) : (e.message || 'Unknown error');
+            const overlay = document.querySelector('.map-overlay p');
+            if (overlay) {
+                overlay.textContent = `Error: ${errorMsg.substring(0, 100)}. Check console.`;
+            }
+        });
+
+        // Handle source errors more gracefully
+        map.on('sourcedata', (e) => {
+            if (e.isSourceLoaded && e.sourceId === 'terrain-rgb' && e.tile) {
+                // Terrain tile loaded successfully
+            }
+        });
+
+        map.on('data', (e) => {
+            if (e.isSourceLoaded && e.source && e.source.type === 'raster-dem') {
+                // Terrain source loaded
+                console.log('Terrain source loaded');
+            }
+        });
+    </script>
+</body>
+</html>
+
+
