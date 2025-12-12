@@ -1,154 +1,131 @@
-# MapLibre MVP with OSM PBF Data
+# MapLibre OSM Map - Scalable Architecture
 
-A minimal MVP for displaying OpenStreetMap PBF data using MapLibre GL JS.
+A scalable monolithic application for displaying and simulating geographic data using MapLibre GL JS, with support for multiple data sources and simulation capabilities.
 
 ## Overview
 
-This project serves the `ks-mo.osm.pbf` file (Kansas-Missouri region) as vector tiles and displays them in a web browser using MapLibre GL JS.
+A scalable monolithic application for displaying and simulating geographic data using MapLibre GL JS. The project is organized as **modular monolithic** architecture - everything is in one codebase but organized into clear, independent systems that can be extracted to microservices later if needed.
+
+## Features
+
+- **3D Map Visualization**: Interactive 3D map with building heights, terrain, and multiple layers
+- **Vector Tiles**: Efficient serving of OSM data as vector tiles
+- **Data Pipeline**: Framework for ingesting and processing data from multiple sources (census, economic, transport, weather)
+- **Simulation Engine**: Core framework for economic, demographic, and transport simulations
+- **REST API**: Versioned API for data access and simulation control
+
+## Project Structure
+
+```
+map/
+├── src/                          # Main application source
+│   ├── server/                   # Express server and API routes
+│   ├── systems/                  # Modular systems
+│   │   ├── data-pipeline/       # Data ingestion and ETL
+│   │   ├── simulation/          # Simulation engine
+│   │   └── map/                 # Map rendering system
+│   ├── shared/                  # Shared utilities
+│   └── config/                  # Configuration management
+├── client/                       # Frontend application
+│   └── public/                  # Static assets (HTML, CSS, JS)
+├── data/                         # Data files
+│   ├── raw/                     # Raw data files
+│   ├── processed/               # Processed data (MBTiles)
+│   └── cache/                   # Cached data
+├── scripts/                      # Processing scripts
+└── docs/                         # Documentation
+```
 
 ## Prerequisites
 
-- Node.js (v14 or higher) - **Note**: Node 22+ works fine with this setup
+- Node.js (v14 or higher)
 - npm (comes with Node.js)
-- **MBTiles file**: You need to convert your PBF file to MBTiles format first (see conversion instructions below)
+- **MBTiles file**: Convert your PBF file to MBTiles format (see below)
 
 ## Installation
 
-1. Install dependencies (no native compilation required):
+1. Install dependencies:
 ```bash
 npm install
 ```
 
-This will install only pure JavaScript dependencies - no native compilation needed!
+2. (Optional) Set up environment variables:
+```bash
+cp .env.example .env
+# Edit .env with your configuration
+```
 
 ## Running the Application
 
-1. Start the tile server:
+1. Start the server:
 ```bash
 npm start
 ```
 
-The server will start on `http://localhost:8080`
+The server will start on `http://localhost:8080` (or the port specified in your `.env` file).
 
 2. Open your web browser and navigate to:
 ```
 http://localhost:8080/index.html
 ```
 
-## Project Structure
+## API Endpoints
 
+### Tiles
+- `GET /data/:source/:z/:x/:y.pbf` - Get vector tile
+- `GET /data/:source.json` - Get tile metadata
+
+### Health
+- `GET /health` - System health check
+
+### Data API (v1)
+- `GET /api/v1/data/location?bounds=...` - Get data by location
+- `GET /api/v1/data/aggregate?bounds=...` - Get aggregated data
+
+### Simulation API (v1)
+- `GET /api/v1/simulation/status` - Get simulation status
+- `POST /api/v1/simulation/start` - Start simulation
+- `POST /api/v1/simulation/stop` - Stop simulation
+- `GET /api/v1/simulation/state` - Get simulation state
+
+## Converting PBF to MBTiles
+
+The server requires MBTiles format. See [docs/DATA_PROCESSING.md](docs/DATA_PROCESSING.md) for detailed instructions.
+
+**Quick Start:**
+```powershell
+cd data
+java -jar planetiler.jar --osm-path=raw/osm/ks-mo.osm.pbf --output=processed/tiles/ks-mo.mbtiles --download --maxzoom=15
 ```
-.
-├── data/
-│   └── ks-mo.osm.pbf          # OSM PBF data file
-├── server.js                   # Tile server startup script
-├── tileserver-config.json      # Tileserver GL configuration
-├── index.html                  # Frontend map display page
-├── package.json                # Node.js dependencies
-└── README.md                   # This file
-```
 
-## How It Works
-
-1. **Tile Server**: The Node.js server uses `@mapbox/mbtiles` (pure JavaScript) to read MBTiles files and serve vector tiles
-2. **Frontend**: The HTML page uses MapLibre GL JS to request tiles from the local server and render them
-3. **Map Style**: A basic style is configured to display roads, water, landuse, and buildings
-4. **No Native Dependencies**: Everything is pure JavaScript - no compilation required!
+**File Locations:**
+The tile server automatically checks these locations for MBTiles files:
+- `data/processed/tiles/` (preferred)
+- `data/` (backward compatible)
 
 ## Configuration
 
-- **Server Port**: Default is 8080. Change by setting the `PORT` environment variable
-- **PBF File**: Currently configured to use `data/ks-mo.osm.pbf`
-- **Map Center**: Set to Kansas-Missouri region ([-94.5, 38.5])
-- **Zoom Levels**: Configured for zoom levels 0-14
+Configuration is managed through:
+- Environment variables (`.env` file)
+- Configuration files in `src/config/`
 
-## Notes
+See `.env.example` for available configuration options.
 
-- **Pure JavaScript**: This solution uses only pure JavaScript libraries - no native compilation required
-- **MBTiles Required**: The server requires MBTiles format (not raw PBF). Convert your PBF file first (see instructions above)
-- **Fast Serving**: MBTiles files are served directly - no on-the-fly processing needed
-- The conversion from PBF to MBTiles is a one-time process
-- Once converted, tiles are served instantly from the MBTiles file
+## Development
 
-## Converting PBF to MBTiles (Required)
+The project is organized into modular systems:
 
-**Important**: This server requires MBTiles format, not raw PBF files. You must convert your PBF file first.
+- **Map System**: Tile serving and map rendering
+- **Data Pipeline**: Data ingestion and processing (Phase 2)
+- **Simulation**: Simulation engine (Phase 3)
 
-### Option 1: Using Tippecanoe (Recommended)
+Each system can be developed and tested independently.
 
-1. **Download Tippecanoe**:
-   - Windows: Download from [Tippecanoe releases](https://github.com/felt/tippecanoe/releases) or use WSL
-   - Or use the pre-built Windows binary if available
+## Documentation
 
-2. **Convert PBF to MBTiles**:
-   ```bash
-   tippecanoe -o data/ks-mo.mbtiles -z14 -Z0 data/ks-mo.osm.pbf
-   ```
-
-### Option 2: Using Planetiler (Java-based, no native compilation)
-
-**You need Java installed for this option.**
-
-1. **Install Java** (if not already installed):
-   - Download Java from [Adoptium](https://adoptium.net/) (recommended) or [Oracle](https://www.oracle.com/java/technologies/downloads/)
-   - Choose "Temurin" (OpenJDK) - version 17 or higher
-   - Download the Windows x64 installer (.msi)
-   - Run the installer and follow the prompts
-   - Verify installation: Open PowerShell and run `java -version`
-
-2. **Convert using Planetiler** (you already have planetiler.jar in the data folder):
-   
-   **Option A: Download required data files automatically** (recommended):
-   ```powershell
-   cd data
-   java -jar planetiler.jar --osm-path=ks-mo.osm.pbf --output=ks-mo.mbtiles --download --maxzoom=15
-   ```
-   
-   **To regenerate with higher zoom (overwrite existing file):**
-   ```powershell
-   cd data
-   java -jar planetiler.jar --osm-path=ks-mo.osm.pbf --output=ks-mo.mbtiles --download --maxzoom=15 --force
-   ```
-   
-   This will automatically download the required lake centerlines, water polygons, and Natural Earth data files (first run only).
-   
-   **Option B: Use from project root with full paths**:
-   ```powershell
-   java -jar data/planetiler.jar --osm-path=data/ks-mo.osm.pbf --output=data/ks-mo.mbtiles --download
-   ```
-   
-   **Note**: The `--download` flag will fetch additional data files needed for the OpenMapTiles profile. These will be saved in `data/sources/` and only need to be downloaded once.
-
-### Option 3: Using Online Tools (No Installation Required)
-
-If you don't want to install Java or other tools, you can use online conversion services:
-
-- **MapTiler Cloud**: Upload your PBF file and download as MBTiles (may require account)
-- **OSM2VectorTiles**: Some online services offer conversion
-- **Note**: For large files (272MB), online conversion may have size limits
-
-### Option 4: Using WSL (Windows Subsystem for Linux)
-
-If you have WSL installed, you can use Linux tools:
-
-```bash
-# In WSL terminal
-sudo apt-get update
-sudo apt-get install tippecanoe
-tippecanoe -o /mnt/c/Users/admir/Github/map/data/ks-mo.mbtiles -z14 /mnt/c/Users/admir/Github/map/data/ks-mo.osm.pbf
-```
-
-### After Conversion
-
-Once you have `data/ks-mo.mbtiles`, the server will automatically detect and serve it. No configuration changes needed!
-
-## Troubleshooting
-
-- **Map not loading**: Ensure the server is running and check the browser console for errors
-- **Tiles not appearing**: Verify the PBF file path in `tileserver-config.json` is correct
-- **CORS errors**: The server is configured with CORS enabled, but if issues persist, check browser console
+- [Architecture](docs/architecture.md) - System architecture and design patterns
+- [Data Processing](docs/DATA_PROCESSING.md) - Guide for processing and generating MBTiles
 
 ## License
 
 ISC
-

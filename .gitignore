@@ -1,36 +1,64 @@
 # See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
-/data
-# dependencies
+
+# Data files
+/data/raw/
+/data/processed/
+/data/cache/
+/data/tmp/
+/data/data/
+!data/raw/.gitkeep
+!data/processed/.gitkeep
+!data/cache/.gitkeep
+!data/tmp/.gitkeep
+
+# Large binary files (should not be committed)
+*.mbtiles
+*.jar
+*.pbf
+*.zip
+*.gz
+*.db
+*.sqlite
+*.sqlite3
+
+# Dependencies
 /node_modules
 /.pnp
 .pnp.js
 
-# testing
+# Testing
 /coverage
 
-# next.js
+# Build outputs
 /.next/
 /out/
-
-# production
 /build
+/client/dist/
 
-# misc
+# Misc
 .DS_Store
 *.pem
 
-# debug
+# Debug
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
-# local env files
+# Environment files
 .env*.local
 .env
+# Note: .env.example should be committed
 
-# vercel
-.vercel
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
 
-# typescript
+# TypeScript
 *.tsbuildinfo
 next-env.d.ts
+
+# Logs
+logs/
+*.log
