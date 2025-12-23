@@ -1,10 +1,10 @@
 {
-  "description": "Kansas City enhanced processing configuration for Planetiler",
+  "description": "Kansas City metro area enhanced processing configuration for Planetiler",
   "bounds": {
-    "minLon": -94.8,
-    "minLat": 39.0,
-    "maxLon": -94.4,
-    "maxLat": 39.2
+    "minLon": -95.2,
+    "minLat": 38.8,
+    "maxLon": -94.0,
+    "maxLat": 39.5
   },
   "processing": {
     "maxzoom": 15,
@@ -19,6 +19,6 @@
     }
   },
   "notes": "This configuration is used with Planetiler's OpenMapTiles profile.",
-  "command": "java -jar data/planetiler.jar --osm-path=data/ks-mo.osm.pbf --output=data/kc-enhanced.mbtiles --bounds=-94.8,39.0,-94.4,39.2 --download --maxzoom=15"
+  "command": "java -jar data/planetiler.jar --osm-path=data/ks-mo.osm.pbf --output=data/processed/tiles/kc-enhanced.mbtiles --bounds=-95.2,38.8,-94.0,39.5 --download --maxzoom=15"
 }
 

@@ -1012,6 +1012,12 @@
 
         // Get POI query bounds - use visible map bounds or center + radius if locked
         function getBoundsString() {
+            // Safety check: ensure map is loaded and ready
+            if (!map || !map.loaded() || !map.getBounds) {
+                // Return a default bounds if map isn't ready (shouldn't happen, but safety first)
+                return '-94.6,39.0,-94.5,39.1'; // Default KC bounds
+            }
+            
             const zoom = map.getZoom();
             const clampedZoom = clampPoiZoom(zoom);
             
@@ -1026,15 +1032,21 @@
             }
             
             // Otherwise, use the visible map bounds (expanded slightly for better coverage)
-            const bounds = map.getBounds();
-            const ne = bounds.getNorthEast();
-            const sw = bounds.getSouthWest();
-            
-            // Expand bounds slightly (5% padding) to ensure we capture POIs near edges
-            const lngPadding = (ne.lng - sw.lng) * 0.05;
-            const latPadding = (ne.lat - sw.lat) * 0.05;
-            
-            return `${sw.lng - lngPadding},${sw.lat - latPadding},${ne.lng + lngPadding},${ne.lat + latPadding}`;
+            try {
+                const bounds = map.getBounds();
+                const ne = bounds.getNorthEast();
+                const sw = bounds.getSouthWest();
+                
+                // Expand bounds slightly (5% padding) to ensure we capture POIs near edges
+                const lngPadding = (ne.lng - sw.lng) * 0.05;
+                const latPadding = (ne.lat - sw.lat) * 0.05;
+                
+                return `${sw.lng - lngPadding},${sw.lat - latPadding},${ne.lng + lngPadding},${ne.lat + latPadding}`;
+            } catch (error) {
+                console.warn('Error getting map bounds, using default:', error);
+                // Fallback to default bounds if getBounds() fails
+                return '-94.6,39.0,-94.5,39.1';
+            }
         }
 
         // Refresh POI summary when map changes (debounced)
@@ -1047,13 +1059,19 @@
             
             if (poiSummaryTimer) clearTimeout(poiSummaryTimer);
             poiSummaryTimer = setTimeout(() => {
-                poiSummaryRefreshScheduled = false;
-                if (document.getElementById('toggle-poi')?.checked) {
-                    // Reset to map bounds if not locked by user click
-                    if (!poiQueryCenterLocked) {
-                        poiQueryCenter = null; // Will use visible map bounds
+                poiSummaryRefreshScheduled = false; // Always reset flag, even on error
+                try {
+                    if (document.getElementById('toggle-poi')?.checked) {
+                        // Reset to map bounds if not locked by user click
+                        if (!poiQueryCenterLocked) {
+                            poiQueryCenter = null; // Will use visible map bounds
+                        }
+                        refreshPoiSummary().catch(err => {
+                            console.warn('Error in refreshPoiSummary:', err);
+                        });
                     }
-                    refreshPoiSummary();
+                } catch (error) {
+                    console.warn('Error in schedulePoiSummaryRefreshOnce:', error);
                 }
             }, delay);
         }
@@ -1064,7 +1082,19 @@
         }
 
         async function refreshPoiSummary() {
-            if (!map.getSource('kc-enhanced')) return;
+            // Safety checks: ensure map and source exist
+            if (!map || !map.getSource) {
+                return;
+            }
+            
+            try {
+                if (!map.getSource('kc-enhanced')) {
+                    return;
+                }
+            } catch (e) {
+                // Source not ready yet
+                return;
+            }
 
             const zoom = map.getZoom();
             if (zoom < 12) {
@@ -1072,6 +1102,7 @@
                 poiSummaryTotal = 0;
                 poiTypes.clear();
                 updatePoiFilter();
+                updateFloatingPoiLegend();
                 return;
             }
 
@@ -1303,6 +1334,7 @@
         document.getElementById('poi-filter').addEventListener('change', applyPoiFilter);
         
         // Update legend counts when map moves or zooms (consolidated handlers)
+        // These handlers are safe - refreshPoiSummary() has its own safety checks
         map.on('idle', () => {
             schedulePoiSummaryRefreshOnce(200);
         });
